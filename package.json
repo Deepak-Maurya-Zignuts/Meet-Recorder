@@ -15,6 +15,7 @@
   "author": "Deepakkumar-Maurya",
   "license": "ISC",
   "dependencies": {
+    "cors": "^2.8.5",
     "ejs": "^3.1.10",
     "express": "^4.21.0",
     "puppeteer": "^23.4.1",

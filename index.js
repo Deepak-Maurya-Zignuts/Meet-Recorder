@@ -1,9 +1,11 @@
 const express = require("express");
 const { startRecording } = require("./meet");
+const cors = require("cors");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -18,10 +20,17 @@ app.post("/startRecording", async (req, res) => {
     const email = "abc@example.com";
     const password = "password";
 
-    // ** Start Recording **
-    const recording = await startRecording(meetingId, email, password);
+    res.send({
+        status: 200,
+        success: true,
+        message: "Meeting started successfully.",
+    });
 
-    res.send({ recording });
+    try {
+        await startRecording(meetingId, email, password);
+    } catch (error) {
+        console.error("Error starting recording:", error);
+    }
 });
 
 app.listen(PORT, () => {
