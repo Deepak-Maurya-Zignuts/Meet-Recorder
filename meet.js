@@ -33,39 +33,39 @@ const startRecording = async (meetingId, email, password) => {
 
         const page = await context.newPage();
 
-        // **attaching logger to Puppeteer console event
-        page.on("console", (msg) => {
-            console.log(`Puppeteer console log: ${msg.text()}`);
-        });
+        // // **attaching logger to Puppeteer console event
+        // page.on("console", (msg) => {
+        //     console.log(`Puppeteer console log: ${msg.text()}`);
+        // });
 
-        page.on("dialog", async (dialog) => {
-            console.log(`Dialog detected: ${dialog.message()}`);
-            await dialog.dismiss();
-        });
+        // page.on("dialog", async (dialog) => {
+        //     console.log(`Dialog detected: ${dialog.message()}`);
+        //     await dialog.dismiss();
+        // });
 
-        page.on("error", (error) => {
-            console.log(`Page error: ${error.message}`, error);
-        });
+        // page.on("error", (error) => {
+        //     console.log(`Page error: ${error.message}`, error);
+        // });
 
-        page.on("pageerror", (error) => {
-            console.log(`Page error: ${error.message}`, error);
-        });
+        // page.on("pageerror", (error) => {
+        //     console.log(`Page error: ${error.message}`, error);
+        // });
 
-        page.on("requestfailed", (request) => {
-            console.log(
-                `Request failed: ${request.url()} - ${
-                    request.failure().errorText
-                }`
-            );
-        });
+        // page.on("requestfailed", (request) => {
+        //     console.log(
+        //         `Request failed: ${request.url()} - ${
+        //             request.failure().errorText
+        //         }`
+        //     );
+        // });
 
-        page.on("response", (response) => {
-            if (!response.ok()) {
-                console.log(
-                    `HTTP error: ${response.status()} on ${response.url()}`
-                );
-            }
-        });
+        // page.on("response", (response) => {
+        //     if (!response.ok()) {
+        //         console.log(
+        //             `HTTP error: ${response.status()} on ${response.url()}`
+        //         );
+        //     }
+        // });
 
         // ** go to google meet
         await page.goto("https://meet.google.com/", {
@@ -107,20 +107,34 @@ const startRecording = async (meetingId, email, password) => {
 
         await sleep(5000);
 
-        // await page.waitForSelector('button[jsname="Qx7uuf"]');
-        // await page.click('button[jsname="Qx7uuf"]');
-        // await sleep(2000);
+        const joinButtonSelector = 'button[jsname="Qx7uuf"]';
+        // const otherWaysToJoinButtonSelector = 'button[jsname="w5gBed"]';
 
-        const buttonSelector = 'button[jsname="Qx7uuf"]';
+        const joinButton = await page.$(joinButtonSelector);
+        // const otherWaysToJoinButton = await page.$(
+        //     otherWaysToJoinButtonSelector
+        // );
 
-        const button = await page.$(buttonSelector);
-
-        if (button) {
-            await button.click();
-            console.log("Clicked on the button with jsname='Qx7uuf'");
-        } else {
-            console.log("Button not found, sleeping for 2 seconds...");
+        await sleep(3000);
+        if (joinButton) {
+            let popup;
+            await page.evaluate(async () => {
+                popup = document.querySelector('div[role="dialog"]');
+                console.log(popup) 
+                if (popup) {
+                    popup.style.display = 'none'; 
+                    console.log('Popup hidden');
+                }
+            });
+            
+            console.log('Popup found');
+            await page.waitForSelector('button[jsname="ix0Hvc"]', {visible: true});
+            await page.click('button[jsname="ix0Hvc"]');
+            
             await sleep(2000);
+            console.log("first button found with jsname='Qx7uuf'");
+            await joinButton.click();
+            console.log("Clicked on the button with jsname='Qx7uuf'");
         }
 
         // ** stream config
