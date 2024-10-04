@@ -1,11 +1,15 @@
-const { executablePath } = require("puppeteer");
+const { executablePath, default: puppeteer } = require("puppeteer");
 const fs = require("fs");
 const puppeteerExtra = require("puppeteer-extra");
 const stealthPlugin = require("puppeteer-extra-plugin-stealth");
 const { launch, getStream } = require("puppeteer-stream");
 const path = require("path");
 
+puppeteerExtra.use(stealthPlugin());
+puppeteerExtra.use(require("puppeteer-extra-plugin-anonymize-ua")());
+
 const startRecording = async (meetingId, email, password) => {
+
     // ** sleep function
     const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
 
@@ -15,69 +19,29 @@ const startRecording = async (meetingId, email, password) => {
         return `google_meet_${timestamp}.webm`;
     };
 
-    try {
-        // ** browser launch
-        const browser = await launch({
-            headless: false,
-            args: ["--no-sandbox", "--disable-setuid-sandbox"],
-            executablePath: executablePath(),
-        });
-
-        // ** override permissions
-        const context = browser.defaultBrowserContext();
-        await context.overridePermissions("https://meet.google.com/", [
-            "microphone",
-            "camera",
-            "notifications",
-        ]);
-
-        const page = await context.newPage();
-
-        // // **attaching logger to Puppeteer console event
-        // page.on("console", (msg) => {
-        //     console.log(`Puppeteer console log: ${msg.text()}`);
-        // });
-
-        // page.on("dialog", async (dialog) => {
-        //     console.log(`Dialog detected: ${dialog.message()}`);
-        //     await dialog.dismiss();
-        // });
-
-        // page.on("error", (error) => {
-        //     console.log(`Page error: ${error.message}`, error);
-        // });
-
-        // page.on("pageerror", (error) => {
-        //     console.log(`Page error: ${error.message}`, error);
-        // });
-
-        // page.on("requestfailed", (request) => {
-        //     console.log(
-        //         `Request failed: ${request.url()} - ${
-        //             request.failure().errorText
-        //         }`
-        //     );
-        // });
-
-        // page.on("response", (response) => {
-        //     if (!response.ok()) {
-        //         console.log(
-        //             `HTTP error: ${response.status()} on ${response.url()}`
-        //         );
-        //     }
-        // });
-
-        // ** go to google meet
-        await page.goto("https://meet.google.com/", {
-            timeout: 30000,
-            waitUntil: "networkidle2",
-        });
-
+    // ** login process
+    const login = async (page, email, password) => {
         // ** click on sign in button
-        await page.waitForSelector('a[href*="ServiceLogin?"]', {
-            visible: true,
+        // await page.waitForSelector('a[href*="ServiceLogin?"]', {
+        //     visible: false,
+        // });
+        // await page.click('a[href*="ServiceLogin?"]', { delay: 2000 });
+
+        await page.evaluate(() => {
+            const links = document.querySelectorAll('a[href*="ServiceLogin?"]');
+            for (let link of links) {
+                const style = window.getComputedStyle(link);
+                if (
+                    style &&
+                    style.display !== "none" &&
+                    style.visibility !== "hidden"
+                ) {
+                    link.click();
+                    break;
+                }
+            }
         });
-        await page.click('a[href*="ServiceLogin?"]', { delay: 2000 });
+
         console.log("Sign In button clicked!");
         await sleep(2000);
 
@@ -92,10 +56,57 @@ const startRecording = async (meetingId, email, password) => {
         await sleep(2000);
 
         // ** entering password
+        await page.waitForSelector('input[type="password"]', { visible: true });
+        await page.click('input[type="password"]');
+        await sleep(2000);
         await page.keyboard.type(`${password}`, { delay: 200 });
         await sleep(2000);
         await page.keyboard.press("Enter");
         await sleep(2000);
+    };
+
+    try {
+        // ** browser launch
+        const browser = await launch(puppeteerExtra, {
+            // defaultViewport: {
+            //     width: 1180,
+            //     height: 950,
+            // },
+            headless: false,
+            args: [
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                // "--headless=new",
+                "--disable-gpu",
+                "--disable-dev-shm-usage",
+                "--disable-blink-features=AutomationControlled",
+            ],
+            executablePath: executablePath(),
+        });
+
+        // ** override permissions
+        const context = browser.defaultBrowserContext();
+        await context.overridePermissions("https://meet.google.com/", [
+            "microphone",
+            "camera",
+            "notifications",
+        ]);
+
+        const page = await context.newPage();
+
+        // ** go to google meet
+        await page.goto("https://meet.google.com/", {
+            timeout: 30000,
+            waitUntil: "networkidle2",
+        });
+
+        await sleep(5000);
+
+        if (page.url().includes("workspace.google.com")) {
+            console.log("Session expired. Logging in again...");
+            // ** Execute the login process
+            await login(page, email, password);
+        }
 
         // ** entering meeting id
         await page.waitForSelector('input[type="text"]', { visible: true });
@@ -110,27 +121,26 @@ const startRecording = async (meetingId, email, password) => {
         const joinButtonSelector = 'button[jsname="Qx7uuf"]';
         // const otherWaysToJoinButtonSelector = 'button[jsname="w5gBed"]';
 
-        const joinButton = await page.$(joinButtonSelector);
-        // const otherWaysToJoinButton = await page.$(
-        //     otherWaysToJoinButtonSelector
-        // );
+        const joinButton = await page.$(joinButtonSelector, { visible: true });
 
         await sleep(3000);
         if (joinButton) {
             let popup;
             await page.evaluate(async () => {
                 popup = document.querySelector('div[role="dialog"]');
-                console.log(popup) 
+                console.log(popup);
                 if (popup) {
-                    popup.style.display = 'none'; 
-                    console.log('Popup hidden');
+                    popup.style.display = "none";
+                    console.log("Popup hidden");
                 }
             });
-            
-            console.log('Popup found');
-            await page.waitForSelector('button[jsname="ix0Hvc"]', {visible: true});
+
+            console.log("Popup found");
+            await page.waitForSelector('button[jsname="ix0Hvc"]', {
+                visible: true,
+            });
             await page.click('button[jsname="ix0Hvc"]');
-            
+
             await sleep(2000);
             console.log("first button found with jsname='Qx7uuf'");
             await joinButton.click();
@@ -154,8 +164,6 @@ const startRecording = async (meetingId, email, password) => {
         stream.pipe(fileStream);
         console.log("Recording started...");
 
-        // Record for a certain duration (e.g., 1 minute here)
-        // await new Promise((resolve) => setTimeout(resolve, 60000)); // Record for 1 minute
         const monitorMeetingEnd = async () => {
             await page.waitForSelector('[aria-label="Leave call"]', {
                 visible: true,
@@ -171,13 +179,16 @@ const startRecording = async (meetingId, email, password) => {
                     console.log("leaveButton", leaveButton);
                     // return !leaveButton;
 
+                    let totalParticipants = 0;
+
                     let participantCount = document.querySelector(
                         ".gFyGKf.BN1Lfc .uGOf1d"
-                    ).innerHTML;
+                    ).textContent;
                     participantCount = Number(participantCount);
+                    totalParticipants = participantCount || 0;
                     console.log(`Number of participants: ${participantCount}`);
 
-                    return participantCount < 2 || !leaveButton;
+                    return totalParticipants < 2 || !leaveButton;
                 });
 
                 if (isMeetingEnded) {
@@ -187,11 +198,46 @@ const startRecording = async (meetingId, email, password) => {
             }
         };
 
+        // ** Stop the recording and close the file stream cleanly
+        const stopRecording = () => {
+            console.log("Stopping the recording...");
+            if (stream && !stream.destroyed) {
+                stream.destroy();
+            }
+            if (fileStream && !fileStream.closed) {
+                fileStream.end();
+            }
+            console.log(`Recording saved as ${uniqueFileName}`);
+        };
+
+        process.on("SIGINT", () => {
+            console.log(
+                "Received SIGINT. Saving and stopping the recording..."
+            );
+            stopRecording();
+            process.exit();
+        });
+
+        process.on("SIGTERM", () => {
+            console.log(
+                "Received SIGTERM. Saving and stopping the recording..."
+            );
+            stopRecording();
+            process.exit();
+        });
+
+        process.on("uncaughtException", (err) => {
+            console.error("Uncaught exception:", err);
+            stopRecording();
+            process.exit(1);
+        });
+
         await monitorMeetingEnd();
 
         // ** Stop the recording
-        stream.destroy();
-        fileStream.end();
+        // stream.destroy();
+        // fileStream.end();
+        stopRecording();
 
         console.log("Recording saved as google_meet_recording.webm");
 
