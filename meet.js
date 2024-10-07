@@ -9,7 +9,6 @@ puppeteerExtra.use(stealthPlugin());
 puppeteerExtra.use(require("puppeteer-extra-plugin-anonymize-ua")());
 
 const startRecording = async (meetingId, email, password) => {
-
     // ** sleep function
     const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
 
@@ -157,9 +156,14 @@ const startRecording = async (meetingId, email, password) => {
         });
 
         // ** Create a write stream to save the video
+        const recordingsDir = path.join(__dirname, "recordings");
+        if (!fs.existsSync(recordingsDir)) {
+            fs.mkdirSync(recordingsDir, { recursive: true });
+        }
+
         const uniqueFileName = generateFileName();
         const fileStream = fs.createWriteStream(
-            path.join(__dirname, "recordings", uniqueFileName)
+            path.join(recordingsDir, uniqueFileName)
         );
         stream.pipe(fileStream);
         console.log("Recording started...");
